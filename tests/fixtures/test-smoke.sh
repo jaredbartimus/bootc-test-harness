@@ -16,6 +16,7 @@ fi
 # 2. If a second argument is passed, verify it preserved spaces and metacharacters literally
 if [ "$#" -ge 2 ]; then
   arg2="$2"
+  # shellcheck disable=SC2016
   expected='argument "with" $dollar ; semicolon'
   if [ "${arg2}" != "${expected}" ]; then
     echo "FAIL: Expected arg2 to be literally: ${expected}" >&2
