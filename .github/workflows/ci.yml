@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  static-and-unit:
+    name: Static Checks & Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Run shellcheck
+        run: |
+          shellcheck bin/bootc-test lib/*.sh tests/*.sh tests/fixtures/*.sh
+
+      - name: Run CLI unit tests
+        run: |
+          ./tests/test_cli.sh
+
+  integration-test:
+    name: Lightweight bootc Integration Smoke Test
+    needs: static-and-unit
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm podman skopeo jq
+
+      - name: Build synthetic test RPM fixture
+        run: |
+          ./tests/fixtures/build-fixture-rpm.sh fixture-rpms
+
+      - name: Test harness via local composite action
+        id: harness-test
+        uses: ./
+        with:
+          base-image: quay.io/fedora/fedora-bootc:41
+          rpms-dir: fixture-rpms
+          test-script: tests/fixtures/test-smoke.sh
+          test-args: /tmp/work
+
+      - name: Verify action outputs
+        run: |
+          echo "Requested Base: ${{ steps.harness-test.outputs.base-image-requested }}"
+          echo "Resolved Base:  ${{ steps.harness-test.outputs.base-image-resolved }}"
+          echo "Derived Tag:    ${{ steps.harness-test.outputs.derived-image-tag }}"
+          echo "Derived ID:     ${{ steps.harness-test.outputs.derived-image-id }}"
+
+          if [ -z "${{ steps.harness-test.outputs.base-image-resolved }}" ]; then
+            echo "Error: base-image-resolved output was empty!" >&2
+            exit 1
+          fi

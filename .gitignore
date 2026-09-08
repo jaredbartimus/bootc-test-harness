@@ -1,0 +1,9 @@
+# Temporary build and test artifacts
+tmp/
+*.tmp
+*.log
+.serena/
+build/
+dist/
+target-rpms/
+test-context.*

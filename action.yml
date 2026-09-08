@@ -1,0 +1,95 @@
+name: 'bootc Test Harness'
+description: 'Build disposable derived bootc image, install local RPMs with dnf5, run tests, and lint.'
+author: 'Jared Bartimus'
+
+inputs:
+  base-image:
+    description: 'bootc base image reference (tag or digest, e.g. ghcr.io/ublue-os/bazzite-deck:stable)'
+    required: true
+  rpms-dir:
+    description: 'Directory containing pre-staged local .rpm files to install'
+    required: true
+  test-script:
+    description: 'Path to caller validation script to execute inside the container'
+    required: false
+    default: ''
+  test-args:
+    description: 'Arguments to pass to the test script after -- (whitespace/newline separated)'
+    required: false
+    default: ''
+  tag:
+    description: 'Custom local image tag for the derived container'
+    required: false
+    default: ''
+  keep-image:
+    description: 'Whether to preserve the derived image after test completion (true/false)'
+    required: false
+    default: 'false'
+
+outputs:
+  base-image-requested:
+    description: 'The requested base image reference'
+    value: ${{ steps.run-harness.outputs.base_image_requested }}
+  base-image-resolved:
+    description: 'The resolved immutable base image reference'
+    value: ${{ steps.run-harness.outputs.base_image_resolved }}
+  derived-image-tag:
+    description: 'Tag of the derived test image'
+    value: ${{ steps.run-harness.outputs.derived_image_tag }}
+  derived-image-id:
+    description: 'ID of the derived test image'
+    value: ${{ steps.run-harness.outputs.derived_image_id }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Ensure required host tools
+      shell: bash
+      run: |
+        missing_tools=()
+        for tool in skopeo jq podman; do
+          if ! command -v "$tool" >/dev/null 2>&1; then
+            missing_tools+=("$tool")
+          fi
+        done
+        if [ "${#missing_tools[@]}" -gt 0 ]; then
+          if command -v apt-get >/dev/null 2>&1; then
+            echo "Installing missing host tools: ${missing_tools[*]}"
+            sudo apt-get update
+            sudo apt-get install -y "${missing_tools[@]}"
+          else
+            echo "Warning: Missing tools (${missing_tools[*]}) and apt-get not available." >&2
+          fi
+        fi
+
+    - id: run-harness
+      shell: bash
+      run: |
+        cli_args=(
+          "--base-image" "${{ inputs.base-image }}"
+          "--rpms-dir" "${{ inputs.rpms-dir }}"
+        )
+        if [ -n "${{ inputs.test-script }}" ]; then
+          cli_args+=("--test-script" "${{ inputs.test-script }}")
+        fi
+        if [ -n "${{ inputs.tag }}" ]; then
+          cli_args+=("--tag" "${{ inputs.tag }}")
+        fi
+        if [ "${{ inputs.keep-image }}" = "true" ]; then
+          cli_args+=("--keep-image")
+        fi
+
+        test_args=()
+        if [ -n "${{ inputs.test-args }}" ]; then
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            read -r -a words <<< "$line"
+            test_args+=("${words[@]}")
+          done <<< "${{ inputs.test-args }}"
+        fi
+
+        if [ "${#test_args[@]}" -gt 0 ]; then
+          "${{ github.action_path }}/bin/bootc-test" "${cli_args[@]}" -- "${test_args[@]}"
+        else
+          "${{ github.action_path }}/bin/bootc-test" "${cli_args[@]}"
+        fi
