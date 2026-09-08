@@ -26,6 +26,7 @@ run_build_and_validation() {
   local created_image_id=""
 
   # Setup exit trap for cleanup of context and disposable images
+  # shellcheck disable=SC2317
   cleanup() {
     local exit_code=$?
     log_info "Cleaning up temporary build context: ${context_dir}"
