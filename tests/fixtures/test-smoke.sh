@@ -13,7 +13,22 @@ if [ -z "${workdir}" ]; then
   exit 1
 fi
 
-# 2. Verify installed package file
+# 2. If a second argument is passed, verify it preserved spaces as a single argv element
+if [ "$#" -ge 2 ]; then
+  arg2="$2"
+  expected="argument with spaces"
+  if [ "${arg2}" != "${expected}" ]; then
+    echo "FAIL: Expected arg2 to be exactly '${expected}', got '${arg2}'" >&2
+    echo "Total arguments received: $#" >&2
+    for i in "$@"; do
+      echo "  arg: '${i}'" >&2
+    done
+    exit 1
+  fi
+  echo "  ok   verified single argv element with spaces: '${arg2}'"
+fi
+
+# 3. Verify installed package file
 if [ ! -f /etc/dummy-test.conf ]; then
   echo "FAIL: /etc/dummy-test.conf missing" >&2
   exit 1

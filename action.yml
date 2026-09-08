@@ -14,7 +14,7 @@ inputs:
     required: false
     default: ''
   test-args:
-    description: 'Arguments to pass to the test script after -- (whitespace/newline separated)'
+    description: 'Arguments to pass to the test script after -- (one argument per line, preserving spaces)'
     required: false
     default: ''
   tag:
@@ -83,8 +83,7 @@ runs:
         if [ -n "${{ inputs.test-args }}" ]; then
           while IFS= read -r line; do
             [ -z "$line" ] && continue
-            read -r -a words <<< "$line"
-            test_args+=("${words[@]}")
+            test_args+=("$line")
           done <<< "${{ inputs.test-args }}"
         fi
 

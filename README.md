@@ -88,7 +88,7 @@ The repository provides a composite action (`action.yml`) that wraps `bin/bootc-
 | `base-image` | Base image reference (tag or digest) | Yes | |
 | `rpms-dir` | Directory containing caller `.rpm` files | Yes | |
 | `test-script` | Path to validation script | No | `''` |
-| `test-args` | Arguments to pass after `--` | No | `''` |
+| `test-args` | Arguments to pass after `--` (one argument per line, preserving spaces within lines) | No | `''` |
 | `tag` | Custom derived image tag | No | `''` |
 | `keep-image` | Keep derived image after test | No | `'false'` |
 

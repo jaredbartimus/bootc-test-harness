@@ -199,6 +199,45 @@ assert_output_contains "Argument with spaces preserved" "ARG: [arg with spaces]"
 assert_output_contains "Argument with quotes preserved" 'ARG: [arg with "quotes" and $variables]' echo "${output}"
 assert_output_contains "Multi-line argument preserved" "ARG: [multi"$'\n'"line]" echo "${output}"
 
+# 8. Tag collision rejection
+echo ""
+echo "=== Testing Custom Tag Collision Rejection ==="
+mock_podman_dir="${temp_test_dir}/mock_podman_bin"
+mkdir -p "${mock_podman_dir}"
+cat <<'MOCK_PODMAN' > "${mock_podman_dir}/podman"
+#!/usr/bin/env bash
+if [ "$1" = "image" ] && [ "$2" = "exists" ]; then
+  if [ "$3" = "localhost/pre-existing:tag" ]; then
+    exit 0
+  fi
+  exit 1
+fi
+if [ "$1" = "images" ]; then
+  if [[ "$*" == *"localhost/pre-existing:tag"* ]]; then
+    echo "existing-img-id-12345"
+    exit 0
+  fi
+  exit 0
+fi
+exit 0
+MOCK_PODMAN
+chmod +x "${mock_podman_dir}/podman"
+
+cat <<'MOCK_SKOPEO' > "${mock_podman_dir}/skopeo"
+#!/usr/bin/env bash
+echo '{"Digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"}'
+MOCK_SKOPEO
+chmod +x "${mock_podman_dir}/skopeo"
+
+OLD_PATH="${PATH}"
+PATH="${mock_podman_dir}:${PATH}"
+
+assert_output_contains "Fails cleanly when custom --tag already exists" \
+  "Image tag 'localhost/pre-existing:tag' already exists. Refusing to overwrite pre-existing image tag." \
+  "${BOOTC_TEST}" --base-image "foo:bar" --rpms-dir "${temp_test_dir}" --tag "localhost/pre-existing:tag"
+
+PATH="${OLD_PATH}"
+
 echo ""
 echo "=== Test Summary ==="
 echo "Passed: ${pass}"
