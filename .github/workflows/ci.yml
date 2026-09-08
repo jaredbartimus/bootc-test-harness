@@ -52,7 +52,7 @@ jobs:
           test-script: tests/fixtures/test-smoke.sh
           test-args: |
             /tmp/work
-            argument with spaces
+            argument "with" $dollar ; semicolon
 
       - name: Verify action outputs
         run: |

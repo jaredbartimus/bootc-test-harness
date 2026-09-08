@@ -14,7 +14,7 @@ inputs:
     required: false
     default: ''
   test-args:
-    description: 'Arguments to pass to the test script after -- (one argument per line, preserving spaces)'
+    description: 'Arguments to pass to the test script after -- (one non-empty argument per line, blank lines skipped)'
     required: false
     default: ''
   tag:
@@ -64,31 +64,39 @@ runs:
 
     - id: run-harness
       shell: bash
+      env:
+        INPUT_BASE_IMAGE: ${{ inputs.base-image }}
+        INPUT_RPMS_DIR: ${{ inputs.rpms-dir }}
+        INPUT_TEST_SCRIPT: ${{ inputs.test-script }}
+        INPUT_TEST_ARGS: ${{ inputs.test-args }}
+        INPUT_TAG: ${{ inputs.tag }}
+        INPUT_KEEP_IMAGE: ${{ inputs.keep-image }}
+        ACTION_PATH: ${{ github.action_path }}
       run: |
         cli_args=(
-          "--base-image" "${{ inputs.base-image }}"
-          "--rpms-dir" "${{ inputs.rpms-dir }}"
+          "--base-image" "$INPUT_BASE_IMAGE"
+          "--rpms-dir" "$INPUT_RPMS_DIR"
         )
-        if [ -n "${{ inputs.test-script }}" ]; then
-          cli_args+=("--test-script" "${{ inputs.test-script }}")
+        if [ -n "$INPUT_TEST_SCRIPT" ]; then
+          cli_args+=("--test-script" "$INPUT_TEST_SCRIPT")
         fi
-        if [ -n "${{ inputs.tag }}" ]; then
-          cli_args+=("--tag" "${{ inputs.tag }}")
+        if [ -n "$INPUT_TAG" ]; then
+          cli_args+=("--tag" "$INPUT_TAG")
         fi
-        if [ "${{ inputs.keep-image }}" = "true" ]; then
+        if [ "$INPUT_KEEP_IMAGE" = "true" ]; then
           cli_args+=("--keep-image")
         fi
 
         test_args=()
-        if [ -n "${{ inputs.test-args }}" ]; then
+        if [ -n "$INPUT_TEST_ARGS" ]; then
           while IFS= read -r line; do
             [ -z "$line" ] && continue
             test_args+=("$line")
-          done <<< "${{ inputs.test-args }}"
+          done <<< "$INPUT_TEST_ARGS"
         fi
 
         if [ "${#test_args[@]}" -gt 0 ]; then
-          "${{ github.action_path }}/bin/bootc-test" "${cli_args[@]}" -- "${test_args[@]}"
+          "$ACTION_PATH/bin/bootc-test" "${cli_args[@]}" -- "${test_args[@]}"
         else
-          "${{ github.action_path }}/bin/bootc-test" "${cli_args[@]}"
+          "$ACTION_PATH/bin/bootc-test" "${cli_args[@]}"
         fi

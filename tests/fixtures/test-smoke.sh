@@ -13,19 +13,20 @@ if [ -z "${workdir}" ]; then
   exit 1
 fi
 
-# 2. If a second argument is passed, verify it preserved spaces as a single argv element
+# 2. If a second argument is passed, verify it preserved spaces and metacharacters literally
 if [ "$#" -ge 2 ]; then
   arg2="$2"
-  expected="argument with spaces"
+  expected='argument "with" $dollar ; semicolon'
   if [ "${arg2}" != "${expected}" ]; then
-    echo "FAIL: Expected arg2 to be exactly '${expected}', got '${arg2}'" >&2
+    echo "FAIL: Expected arg2 to be literally: ${expected}" >&2
+    echo "      Actual arg2 received:         ${arg2}" >&2
     echo "Total arguments received: $#" >&2
     for i in "$@"; do
       echo "  arg: '${i}'" >&2
     done
     exit 1
   fi
-  echo "  ok   verified single argv element with spaces: '${arg2}'"
+  echo "  ok   verified literal argv element with shell metacharacters: '${arg2}'"
 fi
 
 # 3. Verify installed package file

@@ -169,6 +169,7 @@ sample_args=(
   "/tmp/work"
   "arg with spaces"
   'arg with "quotes" and $variables'
+  'argument "with" $dollar ; semicolon'
   "multi
 line"
 )
@@ -193,10 +194,12 @@ runner_test="${temp_test_dir}/run-test.sh"
 chmod +x "${runner_test}"
 
 output="$("${runner_test}")"
-assert_output_contains "Argv count matches exactly" "Arg count: 4" echo "${output}"
+assert_output_contains "Argv count matches exactly" "Arg count: 5" echo "${output}"
 assert_output_contains "Argument with spaces preserved" "ARG: [arg with spaces]" echo "${output}"
 # shellcheck disable=SC2016
 assert_output_contains "Argument with quotes preserved" 'ARG: [arg with "quotes" and $variables]' echo "${output}"
+# shellcheck disable=SC2016
+assert_output_contains "Argument with dollar and semicolon preserved" 'ARG: [argument "with" $dollar ; semicolon]' echo "${output}"
 assert_output_contains "Multi-line argument preserved" "ARG: [multi"$'\n'"line]" echo "${output}"
 
 # 8. Tag collision rejection
