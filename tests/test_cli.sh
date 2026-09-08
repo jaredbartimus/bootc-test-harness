@@ -164,6 +164,7 @@ RECEIVER
 chmod +x "${test_script_path}"
 
 # Simulate context runner script generation as done in lib/build.sh
+# shellcheck disable=SC2016
 sample_args=(
   "/tmp/work"
   "arg with spaces"
@@ -180,9 +181,12 @@ runner_test="${temp_test_dir}/run-test.sh"
   for arg in "${sample_args[@]}"; do
     printf 'args+=(%q)\n' "${arg}"
   done
+  # shellcheck disable=SC2016
   echo 'if [ -x "'"${test_script_path}"'" ]; then'
+  # shellcheck disable=SC2016
   echo '  exec "'"${test_script_path}"'" "${args[@]}"'
   echo 'else'
+  # shellcheck disable=SC2016
   echo '  exec /bin/bash "'"${test_script_path}"'" "${args[@]}"'
   echo 'fi'
 } > "${runner_test}"
@@ -191,6 +195,7 @@ chmod +x "${runner_test}"
 output="$("${runner_test}")"
 assert_output_contains "Argv count matches exactly" "Arg count: 4" echo "${output}"
 assert_output_contains "Argument with spaces preserved" "ARG: [arg with spaces]" echo "${output}"
+# shellcheck disable=SC2016
 assert_output_contains "Argument with quotes preserved" 'ARG: [arg with "quotes" and $variables]' echo "${output}"
 assert_output_contains "Multi-line argument preserved" "ARG: [multi"$'\n'"line]" echo "${output}"
 

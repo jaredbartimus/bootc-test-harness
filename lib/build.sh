@@ -91,11 +91,13 @@ run_build_and_validation() {
       for arg in "${TEST_ARGS[@]}"; do
         printf 'args+=(%q)\n' "${arg}"
       done
-      echo 'if [ -x /tmp/test-assets/test-script ]; then'
-      echo '  exec /tmp/test-assets/test-script "${args[@]}"'
-      echo 'else'
-      echo '  exec /bin/bash /tmp/test-assets/test-script "${args[@]}"'
-      echo 'fi'
+      cat <<'RUNNER_EXEC'
+if [ -x /tmp/test-assets/test-script ]; then
+  exec /tmp/test-assets/test-script "${args[@]}"
+else
+  exec /bin/bash /tmp/test-assets/test-script "${args[@]}"
+fi
+RUNNER_EXEC
     } > "${context_dir}/test-assets/run-test.sh"
     chmod +x "${context_dir}/test-assets/run-test.sh"
     log_info "Staged caller test script: ${TEST_SCRIPT} with ${#TEST_ARGS[@]} argument(s)"
@@ -103,33 +105,45 @@ run_build_and_validation() {
 
   # 3. Generate Containerfile
   {
-    echo 'ARG BASE_IMAGE'
-    echo ''
-    echo 'FROM scratch AS ctx'
-    echo 'COPY rpms /rpms'
+    cat <<'DOCKERFILE_HEAD'
+ARG BASE_IMAGE
+
+FROM scratch AS ctx
+COPY rpms /rpms
+DOCKERFILE_HEAD
+
     if [ "${has_test_script}" = "true" ]; then
       echo 'COPY test-assets /test-assets'
     fi
-    echo ''
-    echo 'FROM ${BASE_IMAGE}'
-    echo ''
-    echo '# Install caller RPMs using ephemeral bind and cache/tmpfs mounts'
-    echo 'RUN --mount=type=bind,from=ctx,source=/rpms,target=/tmp/rpms,ro \'
-    echo '    --mount=type=cache,dst=/var/cache \'
-    echo '    --mount=type=cache,dst=/var/log \'
-    echo '    --mount=type=tmpfs,dst=/run \'
-    echo '    --mount=type=tmpfs,dst=/tmp \'
-    echo '    dnf5 install -y /tmp/rpms/*.rpm'
-    echo ''
+
+    cat <<'DOCKERFILE_BASE'
+
+FROM ${BASE_IMAGE}
+
+# Install caller RPMs using ephemeral bind and cache/tmpfs mounts
+RUN --mount=type=bind,from=ctx,source=/rpms,target=/tmp/rpms,ro \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    --mount=type=tmpfs,dst=/run \
+    --mount=type=tmpfs,dst=/tmp \
+    dnf5 install -y /tmp/rpms/*.rpm
+
+DOCKERFILE_BASE
+
     if [ "${has_test_script}" = "true" ]; then
-      echo '# Execute caller validation script inside tmpfs work environment'
-      echo 'RUN --mount=type=bind,from=ctx,source=/test-assets,target=/tmp/test-assets,ro \'
-      echo '    --mount=type=tmpfs,target=/tmp/work \'
-      echo '    /bin/bash /tmp/test-assets/run-test.sh'
-      echo ''
+      cat <<'DOCKERFILE_TEST'
+# Execute caller validation script inside tmpfs work environment
+RUN --mount=type=bind,from=ctx,source=/test-assets,target=/tmp/test-assets,ro \
+    --mount=type=tmpfs,target=/tmp/work \
+    /bin/bash /tmp/test-assets/run-test.sh
+
+DOCKERFILE_TEST
     fi
-    echo '# Mandatory static structural bootc validation'
-    echo 'RUN bootc container lint'
+
+    cat <<'DOCKERFILE_LINT'
+# Mandatory static structural bootc validation
+RUN bootc container lint
+DOCKERFILE_LINT
   } > "${context_dir}/Containerfile"
 
   # 4. Check for pre-existing image matching tag
@@ -152,6 +166,8 @@ run_build_and_validation() {
     log_info "Derived image successfully created with ID: ${created_image_id}"
   fi
 
+  # shellcheck disable=SC2034
   DERIVED_IMAGE_TAG="${DERIVED_TAG}"
+  # shellcheck disable=SC2034
   DERIVED_IMAGE_ID="${created_image_id:-none}"
 }
