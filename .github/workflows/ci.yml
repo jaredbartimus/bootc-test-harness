@@ -18,10 +18,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install shellcheck
+      - name: Ensure shellcheck is available
         run: |
-          sudo apt-get update
-          sudo apt-get install -y shellcheck
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y shellcheck
+          fi
 
       - name: Run shellcheck
         run: |
@@ -38,10 +40,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install build host tools
+      - name: Ensure fixture build tooling is available
         run: |
-          sudo apt-get update
-          sudo apt-get install -y rpm podman skopeo jq
+          if ! command -v rpmbuild >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y rpm
+          fi
 
       - name: Build synthetic test RPM fixture
         run: |
