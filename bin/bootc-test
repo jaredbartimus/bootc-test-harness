@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+#
+# bin/bootc-test - Reusable CLI for bootc-test-harness
+#
+# Builds a disposable derived bootc image from a caller-specified base,
+# installs caller-supplied RPMs via dnf5 with ephemeral mounts, executes an
+# optional validation script with argv-safe passthrough, and runs
+# 'bootc container lint'.
+#
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/digest.sh
+source "${SCRIPT_DIR}/lib/digest.sh"
+# shellcheck source=lib/build.sh
+source "${SCRIPT_DIR}/lib/build.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: bootc-test [OPTIONS] -- [test-script arguments...]
+
+A project-agnostic test harness for Fedora-family bootc container images.
+
+Required:
+  --base-image <ref>       Base bootc container reference (tag or digest, e.g.
+                           ghcr.io/ublue-os/bazzite-deck:stable or repo@sha256:...)
+  --rpms-dir <path>        Directory containing pre-staged .rpm files to install
+
+Optional:
+  --test-script <path>     Path to test script to execute inside the derived container
+  --tag <image-tag>        Custom local image tag (default: unique harness-owned tag)
+  --keep-image             Do not delete the derived image upon completion
+  -v, --verbose            Enable verbose logging
+  -h, --help               Show this help message
+
+Arguments after '--':
+  All arguments following '--' are passed directly to the test script as argv
+  elements without shell eval or string reparsing.
+EOF
+}
+
+BASE_IMAGE=""
+RPMS_DIR=""
+TEST_SCRIPT=""
+DERIVED_TAG=""
+CALLER_TAG_SPECIFIED=false
+KEEP_IMAGE=false
+VERBOSE=false
+TEST_ARGS=()
+
+# Parse options
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --base-image)
+      [ $# -ge 2 ] || die "--base-image requires a value"
+      BASE_IMAGE="$2"
+      shift 2
+      ;;
+    --rpms-dir)
+      [ $# -ge 2 ] || die "--rpms-dir requires a value"
+      RPMS_DIR="$2"
+      shift 2
+      ;;
+    --test-script)
+      [ $# -ge 2 ] || die "--test-script requires a value"
+      TEST_SCRIPT="$2"
+      shift 2
+      ;;
+    --tag)
+      [ $# -ge 2 ] || die "--tag requires a value"
+      DERIVED_TAG="$2"
+      CALLER_TAG_SPECIFIED=true
+      shift 2
+      ;;
+    --keep-image)
+      KEEP_IMAGE=true
+      shift
+      ;;
+    -v|--verbose)
+      VERBOSE=true
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --)
+      shift
+      TEST_ARGS=("$@")
+      break
+      ;;
+    *)
+      die "Unknown option: $1 (run with --help for usage)"
+      ;;
+  esac
+done
+
+if [ "${VERBOSE}" = "true" ]; then
+  set -x
+fi
+
+# Validation of required arguments and input paths
+[ -n "${BASE_IMAGE}" ] || die "--base-image is required"
+[ -n "${RPMS_DIR}" ] || die "--rpms-dir is required"
+[ -d "${RPMS_DIR}" ] || die "RPM directory not found: ${RPMS_DIR}"
+
+shopt -s nullglob
+_rpm_check=("${RPMS_DIR}"/*.rpm)
+shopt -u nullglob
+[ "${#_rpm_check[@]}" -gt 0 ] || die "No .rpm files found in directory: ${RPMS_DIR}"
+
+if [ -n "${TEST_SCRIPT}" ]; then
+  [ -f "${TEST_SCRIPT}" ] || die "Test script not found: ${TEST_SCRIPT}"
+fi
+
+if [ "${#TEST_ARGS[@]}" -gt 0 ] && [ -z "${TEST_SCRIPT}" ]; then
+  die "Arguments provided after '--' but no --test-script was specified."
+fi
+
+# Tool preflight checks (podman, skopeo, jq)
+check_prerequisites
+
+# Resolve base image digest (or use directly if already pinned)
+resolve_base_image "${BASE_IMAGE}"
+
+# Determine derived image tag
+if [ -z "${DERIVED_TAG}" ]; then
+  DERIVED_TAG="localhost/bootc-test:harness-$(date +%s)-$$-$RANDOM"
+fi
+
+# Execute build, validation script, and bootc container lint
+run_build_and_validation
+
+# Export provenance outputs
+export_provenance \
+  "${BASE_IMAGE_REQUESTED}" \
+  "${BASE_IMAGE_RESOLVED}" \
+  "${DERIVED_IMAGE_TAG}" \
+  "${DERIVED_IMAGE_ID}"
+
+log_info "bootc-test completed successfully."
